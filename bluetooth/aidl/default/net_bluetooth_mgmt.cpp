@@ -18,6 +18,8 @@
 
 #include "net_bluetooth_mgmt.h"
 
+#include <android-base/file.h>
+#include <android-base/strings.h>
 #include <fcntl.h>
 #include <log/log.h>
 #include <poll.h>
@@ -28,6 +30,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <string>
 
 // Definitions imported from <linux/net/bluetooth/bluetooth.h>
 #define BTPROTO_HCI 1
@@ -218,6 +221,20 @@ int NetBluetoothMgmt::openRfkill() {
     ALOGI("index:%d type:%d op:%d", event.idx, event.type, event.op);
 
     if (event.op == RFKILL_OP_ADD && event.type == RFKILL_TYPE_BLUETOOTH) {
+      // A board can also have a Bluetooth rfkill for the adapter's power or
+      // enable line (rfkill-gpio). Blocking that one powers the adapter off
+      // and its HCI interface never comes up, so use the switch of the HCI
+      // device itself, which the kernel names "hci<N>". If the name cannot
+      // be read, keep the first Bluetooth rfkill as before.
+      std::string name;
+      if (::android::base::ReadFileToString(
+              "/sys/class/rfkill/rfkill" + std::to_string(event.idx) + "/name",
+              &name) &&
+          name.rfind("hci", 0) != 0) {
+        ALOGI("skipping rfkill %d (%s), not an hci device", event.idx,
+              ::android::base::Trim(name).c_str());
+        continue;
+      }
       rfkill_bt_index_ = event.idx;
       rfkill_fd_ = fd;
       return 0;
@@ -259,8 +276,9 @@ int NetBluetoothMgmt::rfkill(int block) {
 int NetBluetoothMgmt::openHci(int hci_interface) {
   ALOGI("opening hci interface %d", hci_interface);
 
-  // Block Bluetooth.
-  rfkill(1);
+  // Unblock Bluetooth: the kernel refuses to open a soft-blocked adapter
+  // (ERFKILL on the user channel bind). As in AOSP main.
+  rfkill(0);
 
   // Wait for the HCI interface to complete initialization or to come online.
   int hci = waitHciDev(hci_interface);
@@ -300,8 +318,8 @@ void NetBluetoothMgmt::closeHci() {
     bt_fd_ = -1;
   }
 
-  // Unblock Bluetooth.
-  rfkill(0);
+  // Block Bluetooth. As in AOSP main.
+  rfkill(1);
 }
 
 }  // namespace aidl::android::hardware::bluetooth::impl

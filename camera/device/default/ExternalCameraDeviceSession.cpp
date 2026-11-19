@@ -2878,8 +2878,13 @@ bool ExternalCameraDeviceSession::OutputThread::threadLoop() {
     ALOGV("%s processing new request", __FUNCTION__);
     const int kSyncWaitTimeoutMs = 500;
     for (auto& halBuf : req->buffers) {
-        if (*(halBuf.bufPtr) == nullptr) {
+        // bufPtr stays null when cameraservice returned an error instead of a
+        // buffer for this stream (e.g. gralloc could not allocate it).
+        if (halBuf.bufPtr == nullptr || *(halBuf.bufPtr) == nullptr) {
             ALOGW("%s: buffer for stream %d missing", __FUNCTION__, halBuf.streamId);
+            if (halBuf.bufPtr == nullptr) {
+                halBuf.acquireFence = -1;  // nothing came back, so no fence either
+            }
             halBuf.fenceTimeout = true;
         } else if (halBuf.acquireFence >= 0) {
             int ret = sync_wait(halBuf.acquireFence, kSyncWaitTimeoutMs);

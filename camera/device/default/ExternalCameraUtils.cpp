@@ -168,6 +168,27 @@ ExternalCameraConfig ExternalCameraConfig::loadFromCfg(const char* cfgPath) {
         ret.orientation = orientation->IntAttribute("degree", /*Default*/ kDefaultOrientation);
     }
 
+    // <Sensor>
+    //     <Position id="100" value="0" orientation="270"/>   <!-- value: ANDROID_LENS_FACING_* -->
+    //     ...
+    // </Sensor>
+    // id defaults to cameraIdOffset + the entry's index.
+    XMLElement* sensor = deviceCfg->FirstChildElement("Sensor");
+    if (sensor != nullptr) {
+        int32_t idx = 0;
+        for (XMLElement* pos = sensor->FirstChildElement("Position"); pos != nullptr;
+             pos = pos->NextSiblingElement("Position"), idx++) {
+            SensorSetting setting;
+            setting.id = pos->IntAttribute("id", ret.cameraIdOffset + idx);
+            setting.lensFacing = static_cast<uint8_t>(
+                    pos->UnsignedAttribute("value", ANDROID_LENS_FACING_EXTERNAL));
+            setting.orientation = pos->IntAttribute("orientation", ret.orientation);
+            ALOGI("%s: camera %d: lens facing %d, orientation %d", __FUNCTION__, setting.id,
+                  setting.lensFacing, setting.orientation);
+            ret.sensorSettings.push_back(setting);
+        }
+    }
+
     ALOGI("%s: external camera cfg loaded: maxJpgBufSize %d,"
           " num video buffers %d, num still buffers %d, orientation %d",
           __FUNCTION__, ret.maxJpegBufSize, ret.numVideoBuffers, ret.numStillBuffers,
@@ -212,6 +233,15 @@ bool ExternalCameraConfig::updateFpsList(tinyxml2::XMLElement* fpsList,
     }
     fpsLimits = limits;
     return true;
+}
+
+const ExternalCameraConfig::SensorSetting* ExternalCameraConfig::sensorSetting(int32_t id) const {
+    for (const auto& setting : sensorSettings) {
+        if (setting.id == id) {
+            return &setting;
+        }
+    }
+    return nullptr;
 }
 
 ExternalCameraConfig::ExternalCameraConfig()

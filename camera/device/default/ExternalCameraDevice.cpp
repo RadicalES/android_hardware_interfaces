@@ -420,7 +420,12 @@ status_t ExternalCameraDevice::initDefaultCharsKeys(
     const uint8_t opticalStabilizationMode = ANDROID_LENS_OPTICAL_STABILIZATION_MODE_OFF;
     UPDATE(ANDROID_LENS_INFO_AVAILABLE_OPTICAL_STABILIZATION, &opticalStabilizationMode, 1);
 
-    const uint8_t facing = ANDROID_LENS_FACING_EXTERNAL;
+    // Per-camera lens facing and orientation from the config's <Sensor> entries, if any
+    const ExternalCameraConfig::SensorSetting* sensorSetting =
+            mCfg.sensorSetting(std::atoi(mCameraId.c_str()));
+
+    const uint8_t facing =
+            sensorSetting ? sensorSetting->lensFacing : (uint8_t)ANDROID_LENS_FACING_EXTERNAL;
     UPDATE(ANDROID_LENS_FACING, &facing, 1);
 
     // android.noiseReduction
@@ -473,7 +478,7 @@ status_t ExternalCameraDevice::initDefaultCharsKeys(
     // natural display orientation. For devices with natural landscape display (ex: tablet/TV), the
     // orientation should be 0. For devices with natural portrait display (phone), the orientation
     // should be 270.
-    const int32_t orientation = mCfg.orientation;
+    const int32_t orientation = sensorSetting ? sensorSetting->orientation : mCfg.orientation;
     UPDATE(ANDROID_SENSOR_ORIENTATION, &orientation, 1);
 
     // android.shading

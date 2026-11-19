@@ -107,6 +107,19 @@ struct ExternalCameraConfig {
     // The value of android.sensor.orientation
     int32_t orientation;
 
+    // Per-camera overrides from <Device><Sensor><Position .../></Sensor>: lens facing and sensor
+    // orientation of the camera with the given id. Cameras without an entry report
+    // ANDROID_LENS_FACING_EXTERNAL and the device-wide orientation above.
+    struct SensorSetting {
+        int32_t id;           // camera id (cameraIdOffset + video node number)
+        uint8_t lensFacing;   // ANDROID_LENS_FACING_* (0 front, 1 back, 2 external)
+        int32_t orientation;  // android.sensor.orientation, degrees
+    };
+    std::vector<SensorSetting> sensorSettings;
+
+    // The setting for camera `id`, or nullptr
+    const SensorSetting* sensorSetting(int32_t id) const;
+
   private:
     ExternalCameraConfig();
     static bool updateFpsList(tinyxml2::XMLElement* fpsList, std::vector<FpsLimitation>& fpsLimits);

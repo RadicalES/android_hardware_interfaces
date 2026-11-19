@@ -79,13 +79,14 @@ ExternalCameraConfig ExternalCameraConfig::loadFromCfg(const char* cfgPath) {
         ret.cameraIdOffset = std::atoi(cameraIdOffset->GetText());
     }
 
+    // An absent <ignore> list means no device is ignored; the <Device> section
+    // must still be read.
     XMLElement* ignore = providerCfg->FirstChildElement("ignore");
     if (ignore == nullptr) {
         ALOGI("%s: no internal ignored device specified", __FUNCTION__);
-        return ret;
     }
 
-    XMLElement* id = ignore->FirstChildElement("id");
+    XMLElement* id = ignore != nullptr ? ignore->FirstChildElement("id") : nullptr;
     while (id != nullptr) {
         const char* text = id->GetText();
         if (text != nullptr) {

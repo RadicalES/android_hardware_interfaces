@@ -1504,7 +1504,14 @@ int ExternalCameraDeviceSession::setV4l2FpsLocked(double fps) {
 
     double retFps = streamparm.parm.capture.timeperframe.denominator /
                     static_cast<double>(streamparm.parm.capture.timeperframe.numerator);
-    if (std::fabs(fps - retFps) > 1.0) {
+    if (retFps > fps + 1.0) {
+        // Some UVC devices run a mode at a fixed rate and ignore the request: the OPENAICAM
+        // (1bcf:28cc) stays at 30 fps for MJPG 1280x960 when asked for 10. More frames than
+        // requested is safe here (mMaxLagNs and the buffer count follow the requested rate, so
+        // they only get more generous), and the alternative is no stream at all. See
+        // EvTrackOS-RPi5#53.
+        ALOGW("%s: asked for %f fps, device runs at %f; keeping it", __FUNCTION__, fps, retFps);
+    } else if (std::fabs(fps - retFps) > 1.0) {
         ALOGE("%s: expect fps %f, got %f instead", __FUNCTION__, fps, retFps);
         return -1;
     }

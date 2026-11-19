@@ -875,6 +875,18 @@ void ExternalCameraDevice::updateFpsBounds(
     }
 
     getFrameRateList(fd, fpsUpperBound, &format);
+    if (format.frameRates.empty() && fpsUpperBound > 0) {
+        // Some UVC devices refuse VIDIOC_ENUM_FRAMEINTERVALS for a format they do stream: the
+        // SunplusIT OPENAICAM (1bcf:28cc) fails it for MJPG 1280x720 and 1920x1080. Dropping such
+        // formats leaves the HAL with only the smallest mode, so keep the format and assume the
+        // FpsList bound from external_camera_config.xml. Without a bound (larger than every
+        // FpsList entry) the format is still dropped. See EvTrackOS-RPi5#53.
+        ALOGI("%s: no frame rates enumerated for format:%c%c%c%c %dx%d; assuming %.1f fps",
+              __FUNCTION__, format.fourcc & 0xFF, (format.fourcc >> 8) & 0xFF,
+              (format.fourcc >> 16) & 0xFF, (format.fourcc >> 24) & 0xFF, format.width,
+              format.height, fpsUpperBound);
+        format.frameRates.push_back({1, static_cast<uint32_t>(fpsUpperBound)});
+    }
     if (!format.frameRates.empty()) {
         outFmts.push_back(format);
     }
@@ -945,6 +957,15 @@ std::vector<SupportedV4L2Format> ExternalCameraDevice::getCandidateSupportedForm
         fmtdesc.index++;
     }
     trimSupportedFormats(cropType, &outFmts);
+    // Log what survived enumeration: otherwise the kept formats can only be inferred from the
+    // ones that are missing. See EvTrackOS-RPi5#53.
+    for (const auto& fmt : outFmts) {
+        ALOGI("%s: %s format:%c%c%c%c %dx%d kept, %zu frame rate(s), max %.1f fps", __FUNCTION__,
+              (cropType == VERTICAL) ? "VERTICAL" : "HORIZONTAL", fmt.fourcc & 0xFF,
+              (fmt.fourcc >> 8) & 0xFF, (fmt.fourcc >> 16) & 0xFF, (fmt.fourcc >> 24) & 0xFF,
+              fmt.width, fmt.height, fmt.frameRates.size(),
+              fmt.frameRates.empty() ? 0.0 : fmt.frameRates[0].getFramesPerSecond());
+    }
     return outFmts;
 }
 
